@@ -2,7 +2,7 @@
 
 The suite combines four real UCI benchmarks (as distributed with
 scikit-learn), two redundancy-augmented versions of real datasets, and
-seven synthetic families with *controlled* dependence structure, so
+nine synthetic families with controlled dependence structure, so
 that the relation between the true dependence level and the behaviour
 of the classifiers can be analysed exactly.
 """
