@@ -27,13 +27,21 @@ from experiments.common import save_csv
 R_VALUES = [0, 1, 2, 4, 8, 16, 32]
 N_TRIALS = 10
 
+#: eight real datasets from eight different application domains, so the
+#: duplication stress test is no longer read off three datasets only
+STRESS_SUITE = ["breast-cancer", "credit-ger", "vehicle", "spambase",
+                "yeast", "segmentation", "phoneme", "contraceptive"]
+
 
 def main():
+    from experiments.real_datasets import get_real_datasets
+    real = get_real_datasets()
     datasets = {
         "iris": load_iris(return_X_y=True),
         "wine": load_wine(return_X_y=True),
-        "breast-cancer": load_breast_cancer(return_X_y=True),
     }
+    datasets.update({name: real[name] for name in STRESS_SUITE
+                     if name in real})
     models = {
         "GNB": lambda: GaussianNB(),
         "ABD-NB": lambda: ABDNB(),
@@ -43,7 +51,8 @@ def main():
     cv = StratifiedKFold(5, shuffle=True, random_state=0)
     rows = []
     for dname, (X, y) in datasets.items():
-        print(f"== {dname}")
+        X = np.asarray(X, dtype=float)
+        print(f"== {dname}", flush=True)
         for trial in range(N_TRIALS):
             rng = np.random.default_rng(100 + trial)
             j = int(rng.integers(0, X.shape[1]))

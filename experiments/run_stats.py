@@ -43,7 +43,9 @@ def nemenyi_cd(k: int, N: int, alpha: float = 0.05) -> float:
     """Critical difference for the Nemenyi test.  q_alpha values are the
     Studentized-range-based constants of Demsar (2006), Table 5."""
     q_alpha = {2: 1.960, 3: 2.343, 4: 2.569, 5: 2.728, 6: 2.850, 7: 2.949,
-               8: 3.031, 9: 3.102, 10: 3.164, 11: 3.219, 12: 3.268}[k]
+               8: 3.031, 9: 3.102, 10: 3.164, 11: 3.219, 12: 3.268,
+               13: 3.313, 14: 3.354, 15: 3.391, 16: 3.426, 17: 3.458,
+               18: 3.489, 19: 3.517, 20: 3.544, 21: 3.569, 22: 3.593}[k]
     return q_alpha * np.sqrt(k * (k + 1) / (6.0 * N))
 
 
@@ -53,6 +55,8 @@ def main(metric: str = "accuracy", flagship: str = "ABD-NB",
     table = (
         df.groupby(["dataset", "model"])[metric].mean().unstack()
     )
+    # a model that failed on some dataset would bias the rank analysis
+    table = table.dropna(axis=1, how="any")
     if not higher_is_better:
         table = -table
     ranks = average_ranks(table)

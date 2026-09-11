@@ -340,80 +340,263 @@ def fig_weightfn():
 # 13-16. Benchmark visualisations
 # ---------------------------------------------------------------------------
 
-NB_FAMILY = ["GNB", "MI-WNB", "ABD-NB-L", "ABD-NB-G", "ABD-NB-C", "ABD-NB"]
-ALL_MODELS = NB_FAMILY + ["LR", "kNN", "CART", "RF", "SVM"]
+NB_FAMILY = ["GNB", "MI-WNB", "CW-NB", "WANBIA", "ABD-NB-L", "ABD-NB-G",
+             "ABD-NB-C", "ABD-NB"]
+SEMI_NAIVE = ["TAN", "KDB", "AODE"]
+CALIBRATED = ["GNB-Platt", "GNB-Iso"]
+DISCRIMINATIVE = ["LR", "kNN", "CART", "RF", "XGB", "LGBM", "SVM"]
+ALL_MODELS = NB_FAMILY + SEMI_NAIVE + CALIBRATED + DISCRIMINATIVE
+#: compact column set for the per-dataset heatmap
+HEATMAP_MODELS = ["GNB", "MI-WNB", "CW-NB", "WANBIA", "ABD-NB-G", "ABD-NB",
+                  "TAN", "AODE", "LR", "RF", "LGBM", "SVM"]
+
+EXTRA_COLORS = {
+    "CW-NB": "#a05fb4", "WANBIA": "#3f9f9f", "ABD-NB": "#2a78d6",
+    "TAN": "#7a6f9b", "KDB": "#9c8aa5", "AODE": "#5f7d95",
+    "GNB-Platt": "#c99a2e", "GNB-Iso": "#b07d1a",
+    "XGB": "#c0504d", "LGBM": "#7f9c3a",
+}
+
+
+def _mcolor(m):
+    return MODEL_COLORS.get(m, EXTRA_COLORS.get(m, PALETTE["blue"]))
+
+
+def _strata(datasets):
+    from experiments.datasets import dataset_stratum
+    return [dataset_stratum(d) for d in datasets]
 
 
 def fig_benchmark_heatmap():
     df = load_csv("benchmark")
-    tab = df.pivot_table("accuracy", "dataset", "model")[ALL_MODELS]
-    # rank within each dataset (1 = best)
+    tab = df.pivot_table("accuracy", "dataset", "model")
+    cols = [m for m in HEATMAP_MODELS if m in tab.columns]
+    order = sorted(tab.index, key=lambda d: (_strata([d])[0], d))
+    tab = tab.loc[order, cols]
     ranks = tab.rank(axis=1, ascending=False)
-    fig, ax = new_fig(7.0, 3.4)
+    fig, ax = new_fig(7.0, 8.6)
     cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
         "seqr", list(reversed(["#ffffff"] + SEQ)))
-    im = ax.imshow(ranks.values, cmap=cmap, vmin=1, vmax=len(ALL_MODELS),
-                   aspect="auto")
+    im = ax.imshow(ranks.values, cmap=cmap, vmin=1, vmax=len(cols), aspect="auto")
     for i in range(tab.shape[0]):
         for j in range(tab.shape[1]):
-            v = tab.values[i, j]
-            r = ranks.values[i, j]
-            ax.text(j, i, f"{v:.3f}", ha="center", va="center",
-                    fontsize=5.6, color="white" if r <= 3 else INK)
-    ax.set_xticks(range(len(ALL_MODELS)))
-    ax.set_xticklabels(ALL_MODELS, rotation=35, ha="right", fontsize=6.5)
+            ax.text(j, i, f"{tab.values[i, j]*100:.0f}", ha="center", va="center",
+                    fontsize=4.6, color="white" if ranks.values[i, j] <= 3 else INK)
+    ax.set_xticks(range(len(cols)))
+    ax.set_xticklabels(cols, rotation=40, ha="right", fontsize=6)
     ax.set_yticks(range(tab.shape[0]))
-    ax.set_yticklabels(tab.index, fontsize=6.5)
+    ax.set_yticklabels(tab.index, fontsize=5.4)
     ax.grid(False)
     ax.tick_params(length=0)
-    cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.01)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.45, pad=0.01)
     cbar.set_label("rank (1 = best)", fontsize=7)
     cbar.outline.set_visible(False)
     save_fig(fig, "fig_benchmark_heatmap")
 
 
 def fig_nb_family_bars():
+    """Paired per-dataset comparison: with 48 settings a bar chart is
+    unreadable, so the picture is a scatter of ABD-NB against naive Bayes."""
     df = load_csv("benchmark")
-    datasets = list(df.dataset.unique())
-    tab = df.pivot_table("accuracy", "dataset", "model").loc[datasets, ["GNB", "MI-WNB", "ABD-NB"]]
-    fig, ax = new_fig(7.0, 2.5)
-    _grouped_bars(ax, tab.values, datasets,
-                  ["GNB", "MI-WNB", "ABD-NB"],
-                  [MODEL_COLORS["GNB"], MODEL_COLORS["MI-WNB"],
-                   MODEL_COLORS["ABD-NB-C"]])
-    ax.set_ylabel("accuracy")
-    ax.set_ylim(0.45, 1.02)
-    ax.tick_params(axis="x", rotation=35, labelsize=6)
-    for lbl in ax.get_xticklabels():
-        lbl.set_ha("right")
-    ax.legend(ncol=3, loc="upper center", bbox_to_anchor=(0.5, 1.14))
+    acc = df.pivot_table("accuracy", "dataset", "model")
+    ll = df.pivot_table("log_loss", "dataset", "model")
+    strata = np.array(_strata(list(acc.index)))
+    marks = {"real": ("o", PALETTE["blue"]), "augmented": ("s", PALETTE["orange"]),
+             "synthetic": ("^", PALETTE["aqua"])}
+    fig, axes = new_fig(7.0, 3.0, ncols=2)
+    for ax, tab, name, logscale in ((axes[0], acc, "accuracy", False),
+                                    (axes[1], ll, "log-loss", True)):
+        lo = float(min(tab["GNB"].min(), tab["ABD-NB"].min()))
+        hi = float(max(tab["GNB"].max(), tab["ABD-NB"].max()))
+        pad = 0.03 * (hi - lo)
+        for st, (mk, c) in marks.items():
+            m = strata == st
+            ax.scatter(tab["GNB"][m], tab["ABD-NB"][m], s=16, marker=mk,
+                       facecolor=c, edgecolor="white", lw=0.4, label=st, zorder=3)
+        ax.plot([lo - pad, hi + pad], [lo - pad, hi + pad], color=MUTED,
+                lw=0.9, ls="--", zorder=1)
+        if logscale:
+            ax.set_xscale("log"); ax.set_yscale("log")
+        ax.set_xlabel(f"Gaussian naive Bayes {name}")
+        ax.set_ylabel(f"ABD-NB {name}")
+        better = "above" if not logscale else "below"
+        ax.set_title(f"points {better} the diagonal favour ABD-NB", fontsize=7)
+    axes[0].legend(fontsize=6, loc="lower right")
     save_fig(fig, "fig_nb_family_bars")
 
 
 def fig_calibration_benchmark():
+    """Per-dataset relative log-loss change, sorted -- the calibration story."""
     df = load_csv("benchmark")
-    datasets = list(df.dataset.unique())
-    te = df.pivot_table("ece", "dataset", "model").loc[datasets, ["GNB", "ABD-NB"]]
-    tl = df.pivot_table("log_loss", "dataset", "model").loc[datasets, ["GNB", "ABD-NB"]]
-    fig, axes = new_fig(7.0, 2.5, ncols=2)
-    colors = [MODEL_COLORS["GNB"], MODEL_COLORS["ABD-NB-C"]]
-    _grouped_bars(axes[0], te.values, datasets, ["GNB", "ABD-NB"], colors)
-    axes[0].set_ylabel("ECE")
-    _grouped_bars(axes[1], tl.values, datasets, ["GNB", "ABD-NB"], colors)
+    ll = df.pivot_table("log_loss", "dataset", "model")
+    ece = df.pivot_table("ece", "dataset", "model")
+    rel = (100 * (ll["GNB"] - ll["ABD-NB"]) / ll["GNB"]).sort_values()
+    rel_e = (100 * (ece["GNB"] - ece["ABD-NB"]) / ece["GNB"].clip(lower=1e-6)
+             ).reindex(rel.index)
+    fig, axes = new_fig(7.0, 4.4, ncols=2, sharey=True)
+    for ax, series, label in ((axes[0], rel, "log-loss reduction (%)"),
+                              (axes[1], rel_e, "ECE reduction (%)")):
+        colors = [PALETTE["aqua"] if v > 0 else PALETTE["red"] for v in series]
+        ax.barh(np.arange(len(series)), series.values, color=colors, height=0.72)
+        ax.axvline(0, color=INK2, lw=0.8)
+        ax.set_xlabel(label)
+        ax.grid(axis="y", visible=False)
+    axes[0].set_yticks(np.arange(len(rel)))
+    axes[0].set_yticklabels(rel.index, fontsize=5.2)
+    save_fig(fig, "fig_calibration_benchmark")
+
+
+def fig_rank_summary():
+    """Mean ranks over the whole suite, accuracy and log-loss side by side."""
+    acc = load_csv("stats_ranks").set_index("model")["avg_rank"]
+    ll = load_csv("stats_ranks_logloss").set_index("model")["avg_rank"]
+    order = acc.sort_values().index
+    fig, ax = new_fig(7.0, 3.2)
+    y = np.arange(len(order))
+    ax.barh(y - 0.2, acc.loc[order], 0.38, color=PALETTE["blue"], label="accuracy")
+    ax.barh(y + 0.2, ll.reindex(order), 0.38, color=PALETTE["yellow"],
+            label="log-loss")
+    ax.set_yticks(y)
+    ax.set_yticklabels(order, fontsize=6.5)
+    ax.invert_yaxis()
+    ax.set_xlabel("mean rank across the 48 benchmark settings (lower is better)")
+    ax.grid(axis="y", visible=False)
+    ax.legend(fontsize=6.5, ncol=2)
+    save_fig(fig, "fig_rank_summary")
+
+
+def fig_redundancy_profile():
+    """Does the gain track the measured redundancy of a real dataset?"""
+    df = load_csv("redundancy_profile")
+    st = load_csv("redundancy_profile_stats").set_index("target")
+    fig, axes = new_fig(7.0, 2.8, ncols=2)
+    panels = [(axes[0], "d_acc", "accuracy gain over NB (points)",
+               "accuracy gain (pts)"),
+              (axes[1], "d_ll_rel", "log-loss reduction over NB (%)",
+               "log-loss reduction (%)")]
+    for ax, col, ylabel, key in panels:
+        ax.axhline(0, color=MUTED, lw=0.8, ls="--")
+        ax.scatter(df["redundancy"], df[col], s=20, facecolor=PALETTE["blue"],
+                   edgecolor="white", lw=0.4, zorder=3)
+        z = np.polyfit(df["redundancy"], df[col], 1)
+        xs = np.linspace(df["redundancy"].min(), df["redundancy"].max(), 50)
+        ax.plot(xs, np.polyval(z, xs), color=PALETTE["orange"], lw=1.3, zorder=2)
+        rho = st.loc[key, "spearman_rho"]
+        pv = st.loc[key, "spearman_p"]
+        ax.set_xlabel("redundancy index  $R = 1 - M_{\mathrm{eff}}/d$")
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"Spearman $\\rho={rho:.2f}$  ($p={pv:.1e}$)", fontsize=7)
+    save_fig(fig, "fig_redundancy_profile")
+
+
+def fig_conditions():
+    """When does the correction help, and when does it fail?"""
+    s = load_csv("conditions_summary")
+    factors = list(dict.fromkeys(s["factor"]))
+    n = len(factors)
+    ncols = 4
+    nrows = int(np.ceil(n / ncols))
+    set_style()
+    fig, axes = plt.subplots(nrows, ncols, figsize=(7.0, 2.05 * nrows),
+                             constrained_layout=True)
+    axes = np.atleast_1d(axes).ravel()
+    for ax, factor in zip(axes, factors):
+        sub = s[s["factor"] == factor]
+        x = np.arange(len(sub))
+        colors = [{"help": PALETTE["aqua"], "hurt": PALETTE["red"],
+                   "parity": PALETTE["yellow"]}[v] for v in sub["verdict"]]
+        ax.axhline(0, color=MUTED, lw=0.8, ls="--")
+        ax.bar(x, sub["d_acc"], 0.62, color=colors)
+        ax.errorbar(x, sub["d_acc"],
+                    yerr=[sub["d_acc"] - sub["ci_lo"], sub["ci_hi"] - sub["d_acc"]],
+                    fmt="none", ecolor=INK2, elinewidth=0.8, capsize=1.6)
+        ax.set_xticks(x)
+        ax.set_xticklabels(sub["value"], fontsize=5.8, rotation=0)
+        ax.set_title(factor, fontsize=7)
+        ax.grid(axis="x", visible=False)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+    for ax in axes[n:]:
+        ax.axis("off")
+    for i in range(0, n, ncols):
+        axes[i].set_ylabel("$\Delta$ accuracy (pts)", fontsize=6.5)
+    save_fig(fig, "fig_conditions")
+
+
+def fig_finite_sample():
+    dev = load_csv("finite_sample_deviation")
+    reg = load_csv("finite_sample_regret_summary")
+    g = dev.groupby("n")[["mean_dev", "q95_dev"]].first().reset_index()
+    fig, axes = new_fig(7.0, 2.6, ncols=2)
+    ax = axes[0]
+    ax.plot(g["n"], g["mean_dev"], "o-", color=PALETTE["blue"], ms=3,
+            label="mean $\\|\\hat w-w^*\\|_\\infty$")
+    ax.plot(g["n"], g["q95_dev"], "s-", color=PALETTE["violet"], ms=3,
+            label="95th percentile")
+    ref = g["mean_dev"].iloc[0] * np.sqrt(g["n"].iloc[0] / g["n"])
+    ax.plot(g["n"], ref, "--", color=MUTED, lw=1.0, label="$n^{-1/2}$ reference")
+    ax.set_xscale("log"); ax.set_yscale("log")
+    ax.set_xlabel("training size $n$")
+    ax.set_ylabel("weight deviation")
+    ax.legend(fontsize=6)
+    ax2 = axes[1]
+    for eps, c in zip(sorted(dev["eps"].unique()),
+                      [PALETTE["blue"], PALETTE["orange"], PALETTE["aqua"]]):
+        sub = dev[dev["eps"] == eps]
+        ax2.plot(sub["n"], np.maximum(sub["empirical"], 5e-4), "o-", color=c, ms=3,
+                 label=f"$\\epsilon={eps}$")
+    ax2.set_xscale("log"); ax2.set_yscale("log")
+    ax2.set_xlabel("training size $n$")
+    ax2.set_ylabel("$\\mathbb{P}(\\|\\hat w - w^*\\|_\\infty > \\epsilon)$")
+    ax2.legend(fontsize=6.5)
+    save_fig(fig, "fig_finite_sample")
+
+
+def fig_selection_regret():
+    reg = load_csv("finite_sample_regret_summary")
+    fig, ax = new_fig(4.6, 2.5)
+    ax.plot(reg["n"], 100 * reg["regret_mean"], "o-", color=PALETTE["blue"], ms=3.5,
+            label="mean regret vs.\\ grid oracle")
+    ax.plot(reg["n"], 100 * reg["regret_q95"], "s-", color=PALETTE["violet"], ms=3.5,
+            label="95th percentile")
+    ax.plot(reg["n"], 100 * reg["bound"], "--", color=PALETTE["orange"], lw=1.3,
+            label="finite-sample bound (Thm.)")
+    ax.set_xscale("log"); ax.set_yscale("log")
+    ax.set_xlabel("training size $n$")
+    ax.set_ylabel("accuracy regret (points)")
+    ax.legend(fontsize=6.5)
+    save_fig(fig, "fig_selection_regret")
+
+
+def fig_categorical():
+    df = load_csv("categorical")
+    models = ["Cat-NB", "Cat-ABD-G", "Cat-ABD", "TAN", "AODE"]
+    acc = df.pivot_table("accuracy", "dataset", "model")
+    ll = df.pivot_table("log_loss", "dataset", "model")
+    datasets = list(acc.index)
+    cols = [m for m in models if m in acc.columns]
+    colors = [MODEL_COLORS["GNB"], PALETTE["aqua"], PALETTE["blue"],
+              EXTRA_COLORS["TAN"], EXTRA_COLORS["AODE"]][:len(cols)]
+    fig, axes = new_fig(7.0, 4.4, nrows=2)
+    _grouped_bars(axes[0], acc[cols].values, datasets, cols, colors)
+    axes[0].set_ylabel("accuracy")
+    axes[0].set_ylim(max(0.0, float(acc[cols].values.min()) - 0.06), 1.02)
+    _grouped_bars(axes[1], ll[cols].values, datasets, cols, colors)
     axes[1].set_ylabel("log-loss")
     axes[1].set_yscale("log")
     for ax in axes:
-        ax.tick_params(axis="x", rotation=45, labelsize=5.4)
+        ax.tick_params(axis="x", rotation=25, labelsize=6)
         for lbl in ax.get_xticklabels():
             lbl.set_ha("right")
-    axes[0].legend(ncol=2)
-    save_fig(fig, "fig_calibration_benchmark")
+    axes[0].legend(ncol=len(cols), loc="upper center", bbox_to_anchor=(0.5, 1.16),
+                   fontsize=6.5)
+    save_fig(fig, "fig_categorical")
 
 
 def fig_boxplots():
     df = load_csv("benchmark")
-    datasets = ["breast-cancer", "wine-red", "synth-conflict", "synth-blocks"]
-    models = ["GNB", "MI-WNB", "ABD-NB", "LR", "RF"]
+    datasets = ["breast-cancer", "vehicle", "phoneme", "synth-conflict"]
+    models = ["GNB", "WANBIA", "ABD-NB", "AODE", "LGBM"]
     fig, axes = new_fig(7.0, 2.3, ncols=len(datasets), sharey=False)
     for ax, ds in zip(axes, datasets):
         data = [df[(df.dataset == ds) & (df.model == m)].accuracy.values
@@ -437,14 +620,15 @@ def fig_boxplots():
 
 def fig_runtime():
     df = load_csv("benchmark")
-    g = df.groupby("model")[["fit_time", "predict_time"]].mean().loc[ALL_MODELS]
-    fig, ax = new_fig(3.45, 2.4)
-    x = np.arange(len(ALL_MODELS))
+    order = [m for m in ALL_MODELS if m in set(df.model)]
+    g = df.groupby("model")[["fit_time", "predict_time"]].mean().loc[order]
+    fig, ax = new_fig(4.6, 2.4)
+    x = np.arange(len(order))
     ax.bar(x - 0.2, g.fit_time, 0.38, color=BLUE, label="fit")
     ax.bar(x + 0.2, g.predict_time, 0.38, color=YELLOW, label="predict")
     ax.set_yscale("log")
     ax.set_xticks(x)
-    ax.set_xticklabels(ALL_MODELS, rotation=45, ha="right", fontsize=6)
+    ax.set_xticklabels(order, rotation=45, ha="right", fontsize=6)
     ax.set_ylabel("time per fold (s)")
     ax.grid(axis="x", visible=False)
     ax.legend()
@@ -463,7 +647,7 @@ def fig_cd_diagram():
     k = len(ranks)
     lo, hi = 1, k
     set_style()
-    fig, ax = plt.subplots(figsize=(7.0, 2.6))
+    fig, ax = plt.subplots(figsize=(7.0, 3.4))
     ax.set_xlim(hi + 0.3, lo - 0.3)
     ax.set_ylim(0, 1)
     ax.axis("off")
@@ -590,6 +774,12 @@ FIGS = [
     fig_weightfn,
     fig_benchmark_heatmap,
     fig_nb_family_bars,
+    fig_rank_summary,
+    fig_redundancy_profile,
+    fig_conditions,
+    fig_finite_sample,
+    fig_selection_regret,
+    fig_categorical,
     fig_calibration_benchmark,
     fig_boxplots,
     fig_runtime,

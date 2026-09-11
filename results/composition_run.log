@@ -1,0 +1,97 @@
+== iris               LL: NB=0.133 NB+P=0.203 ABD=0.136 ABD+P=0.211 | acc ABD+P=0.953
+  [csv] composition.csv
+== wine               LL: NB=0.086 NB+P=0.126 ABD=0.093 ABD+P=0.134 | acc ABD+P=0.969
+  [csv] composition.csv
+== breast-cancer      LL: NB=0.583 NB+P=0.211 ABD=0.211 ABD+P=0.180 | acc ABD+P=0.946
+  [csv] composition.csv
+== digits             LL: NB=2.445 NB+P=0.567 ABD=2.451 ABD+P=0.577 | acc ABD+P=0.866
+  [csv] composition.csv
+== heart-cleveland    LL: NB=0.630 NB+P=0.420 ABD=0.605 ABD+P=0.417 | acc ABD+P=0.843
+  [csv] composition.csv
+== hepatitis          LL: NB=1.903 NB+P=0.399 ABD=1.866 ABD+P=0.402 | acc ABD+P=0.794
+  [csv] composition.csv
+== dermatology        LL: NB=2.987 NB+P=0.336 ABD=3.025 ABD+P=0.340 | acc ABD+P=0.881
+  [csv] composition.csv
+== hypothyroid        LL: NB=16.480 NB+P=0.187 ABD=5.222 ABD+P=0.184 | acc ABD+P=0.952
+  [csv] composition.csv
+== saheart            LL: NB=0.803 NB+P=0.563 ABD=0.707 ABD+P=0.566 | acc ABD+P=0.703
+  [csv] composition.csv
+== spectf             LL: NB=3.900 NB+P=0.427 ABD=2.476 ABD+P=0.425 | acc ABD+P=0.757
+  [csv] composition.csv
+== new-thyroid        LL: NB=0.157 NB+P=0.156 ABD=0.158 ABD+P=0.157 | acc ABD+P=0.965
+  [csv] composition.csv
+== breast-w           LL: NB=0.765 NB+P=0.145 ABD=0.737 ABD+P=0.145 | acc ABD+P=0.960
+  [csv] composition.csv
+== horse-colic        LL: NB=1.263 NB+P=0.543 ABD=1.170 ABD+P=0.540 | acc ABD+P=0.747
+  [csv] composition.csv
+== ecoli              LL: NB=1.567 NB+P=0.578 ABD=1.571 ABD+P=0.583 | acc ABD+P=0.823
+  [csv] composition.csv
+== yeast              LL: NB=7.999 NB+P=1.454 ABD=7.971 ABD+P=1.454 | acc ABD+P=0.410
+  [csv] composition.csv
+== penguins           LL: NB=0.086 NB+P=0.129 ABD=0.089 ABD+P=0.121 | acc ABD+P=0.967
+  [csv] composition.csv
+== mushroom           LL: NB=0.618 NB+P=0.368 ABD=0.618 ABD+P=0.363 | acc ABD+P=0.899
+  [csv] composition.csv
+== soybean            LL: NB=3.805 NB+P=0.594 ABD=3.691 ABD+P=0.601 | acc ABD+P=0.845
+  [csv] composition.csv
+== splice-dna         LL: NB=0.392 NB+P=0.299 ABD=0.379 ABD+P=0.297 | acc ABD+P=0.909
+  [csv] composition.csv
+== credit-aus         LL: NB=1.132 NB+P=0.460 ABD=0.913 ABD+P=0.420 | acc ABD+P=0.824
+  [csv] composition.csv
+== credit-ger         LL: NB=0.696 NB+P=0.520 ABD=0.671 ABD+P=0.517 | acc ABD+P=0.748
+  [csv] composition.csv
+== churn              LL: NB=0.387 NB+P=0.311 ABD=0.376 ABD+P=0.322 | acc ABD+P=0.854
+  [csv] composition.csv
+== profb              LL: NB=0.732 NB+P=0.614 ABD=0.732 ABD+P=0.614 | acc ABD+P=0.667
+  [csv] composition.csv
+== contraceptive      LL: NB=1.368 NB+P=0.994 ABD=1.293 ABD+P=0.995 | acc ABD+P=0.501
+  [csv] composition.csv
+== titanic            LL: NB=0.808 NB+P=0.540 ABD=0.644 ABD+P=0.528 | acc ABD+P=0.780
+  [csv] composition.csv
+== nursery            LL: NB=1.572 NB+P=0.537 ABD=1.571 ABD+P=0.536 | acc ABD+P=0.812
+  [csv] composition.csv
+== segmentation       LL: NB=1.616 NB+P=0.686 ABD=1.119 ABD+P=0.634 | acc ABD+P=0.814
+  [csv] composition.csv
+== vehicle            LL: NB=2.544 NB+P=1.153 ABD=1.230 ABD+P=1.058 | acc ABD+P=0.526
+  [csv] composition.csv
+== satimage           LL: NB=3.467 NB+P=0.729 ABD=1.665 ABD+P=0.713 | acc ABD+P=0.803
+  [csv] composition.csv
+== phoneme            LL: NB=0.632 NB+P=0.472 ABD=0.582 ABD+P=0.469 | acc ABD+P=0.774
+  [csv] composition.csv
+== page-blocks        LL: NB=1.323 NB+P=0.259 ABD=0.490 ABD+P=0.232 | acc ABD+P=0.937
+  [csv] composition.csv
+== ionosphere         LL: NB=1.104 NB+P=0.327 ABD=1.073 ABD+P=0.324 | acc ABD+P=0.892
+  [csv] composition.csv
+== sonar              LL: NB=2.313 NB+P=0.597 ABD=2.133 ABD+P=0.602 | acc ABD+P=0.666
+  [csv] composition.csv
+== texture            LL: NB=3.041 NB+P=0.887 ABD=1.056 ABD+P=0.749 | acc ABD+P=0.801
+  [csv] composition.csv
+== mfeat-karhunen     LL: NB=0.489 NB+P=0.312 ABD=0.427 ABD+P=0.311 | acc ABD+P=0.935
+  [csv] composition.csv
+== spambase           LL: NB=4.040 NB+P=0.388 ABD=3.460 ABD+P=0.386 | acc ABD+P=0.832
+  [csv] composition.csv
+== magic              LL: NB=0.990 NB+P=0.554 ABD=0.762 ABD+P=0.540 | acc ABD+P=0.747
+  [csv] composition.csv
+== iris-red           LL: NB=0.283 NB+P=0.201 ABD=0.158 ABD+P=0.193 | acc ABD+P=0.963
+  [csv] composition.csv
+== wine-red           LL: NB=0.222 NB+P=0.133 ABD=0.132 ABD+P=0.138 | acc ABD+P=0.975
+  [csv] composition.csv
+== synth-rho0.0       LL: NB=0.608 NB+P=0.608 ABD=0.608 ABD+P=0.608 | acc ABD+P=0.656
+  [csv] composition.csv
+== synth-rho0.3       LL: NB=0.898 NB+P=0.668 ABD=0.839 ABD+P=0.668 | acc ABD+P=0.596
+  [csv] composition.csv
+== synth-rho0.6       LL: NB=1.184 NB+P=0.676 ABD=0.856 ABD+P=0.674 | acc ABD+P=0.578
+  [csv] composition.csv
+== synth-rho0.9       LL: NB=1.474 NB+P=0.679 ABD=0.726 ABD+P=0.677 | acc ABD+P=0.582
+  [csv] composition.csv
+== synth-blocks       LL: NB=0.106 NB+P=0.112 ABD=0.065 ABD+P=0.090 | acc ABD+P=0.970
+  [csv] composition.csv
+== synth-conflict     LL: NB=1.237 NB+P=0.537 ABD=0.341 ABD+P=0.337 | acc ABD+P=0.872
+  [csv] composition.csv
+== synth-classdep     LL: NB=0.800 NB+P=0.636 ABD=0.692 ABD+P=0.635 | acc ABD+P=0.658
+  [csv] composition.csv
+== synth-nonlin       LL: NB=0.286 NB+P=0.289 ABD=0.286 ABD+P=0.288 | acc ABD+P=0.891
+  [csv] composition.csv
+== synth-sklearn      LL: NB=0.612 NB+P=0.392 ABD=0.405 ABD+P=0.383 | acc ABD+P=0.843
+  [csv] composition.csv
+  [csv] composition.csv

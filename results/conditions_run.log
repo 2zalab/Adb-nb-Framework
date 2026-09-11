@@ -1,0 +1,107 @@
+  redundancy r         = 1      done
+  redundancy r         = 2      done
+  redundancy r         = 4      done
+  redundancy r         = 8      done
+  redundancy r         = 16     done
+  redundancy r         = 32     done
+  dependence rho       = 0.0    done
+  dependence rho       = 0.2    done
+  dependence rho       = 0.4    done
+  dependence rho       = 0.6    done
+  dependence rho       = 0.8    done
+  dependence rho       = 0.95   done
+  sample size n        = 50     done
+  sample size n        = 100    done
+  sample size n        = 200    done
+  sample size n        = 500    done
+  sample size n        = 1000   done
+  sample size n        = 4000   done
+  dimension d          = 7      done
+  dimension d          = 13     done
+  dimension d          = 26     done
+  dimension d          = 51     done
+  dimension d          = 101    done
+  dimension d          = 201    done
+  class imbalance      = 0.5    done
+  class imbalance      = 0.35   done
+  class imbalance      = 0.2    done
+  class imbalance      = 0.1    done
+  class imbalance      = 0.05   done
+/usr/local/lib/python3.11/dist-packages/sklearn/model_selection/_split.py:812: UserWarning: The least populated class in y has only 2 members, which is less than n_splits=3.
+  warnings.warn(
+  class imbalance      = 0.02   done
+  dependence form      = False  done
+  dependence form      = True   done
+  distribution shift   = 0.0    done
+  distribution shift   = 0.25   done
+  distribution shift   = 0.5    done
+  distribution shift   = 1.0    done
+  distribution shift   = 1.5    done
+  block informativeness = 0.1    done
+  block informativeness = 0.35   done
+  block informativeness = 0.7    done
+  block informativeness = 1.2    done
+  block informativeness = 2.0    done
+  irrelevant features  = 0      done
+  irrelevant features  = 5      done
+  irrelevant features  = 20     done
+  irrelevant features  = 50     done
+  irrelevant features  = 100    done
+  independent signal   = 1.0    done
+  independent signal   = 0.5    done
+  independent signal   = 0.25   done
+  independent signal   = 0.0    done
+  [csv] conditions_raw.csv
+  [csv] conditions_summary.csv
+               factor value     d_acc     ci_lo     ci_hi  d_logloss     d_ece  gamma_med  gamma_zero_frac  deff_ratio verdict
+         redundancy r     1  0.001667 -0.028333  0.033333   0.000031 -0.000138        4.0         0.200000    1.000000  parity
+         redundancy r     2  0.403333  0.156667  0.626708   0.010807  0.004194        1.0         0.000000    1.000000    help
+         redundancy r     4  3.396667  2.821583  3.948417   0.109612  0.051107        1.0         0.000000    0.866667    help
+         redundancy r     8  8.835000  7.863083  9.781750   0.480304  0.127648        2.0         0.000000    0.738660    help
+         redundancy r    16 13.521667 12.789958 14.295042   1.446241  0.194622        2.0         0.000000    0.602341    help
+         redundancy r    32 17.190000 16.656500 17.715000   3.429829  0.231918        2.0         0.000000    0.472149    help
+       dependence rho   0.0 -0.023333 -0.056667  0.003333   0.000030  0.000551        4.0         0.333333    1.000000  parity
+       dependence rho   0.2  0.263333  0.151667  0.373333   0.003574  0.000095        4.0         0.000000    1.000000    help
+       dependence rho   0.4  2.371667  1.845000  2.946667   0.061288  0.022244        4.0         0.000000    0.941176    help
+       dependence rho   0.6  4.446667  3.679875  5.253417   0.150888  0.057119        2.0         0.000000    0.882353    help
+       dependence rho   0.8  6.035000  5.131500  6.890042   0.266315  0.089866        2.0         0.000000    0.823529    help
+       dependence rho  0.95  7.296667  6.301500  8.238500   0.369811  0.114520        1.0         0.000000    0.764706    help
+        sample size n    50  2.573333  0.996667  4.311875   0.331691  0.042359        4.0         0.000000    0.845647    help
+        sample size n   100  4.323333  2.956458  5.743417   0.235304  0.066807        2.0         0.000000    0.823529    help
+        sample size n   200  6.715000  6.218333  7.286750   0.330651  0.100526        2.0         0.000000    0.821843    help
+        sample size n   500  6.035000  5.113292  6.935042   0.266315  0.089866        2.0         0.000000    0.823529    help
+        sample size n  1000  6.318333  5.801625  6.795083   0.256600  0.091167        1.0         0.000000    0.823529    help
+        sample size n  4000  6.345000  5.911625  6.740042   0.249784  0.090641        1.0         0.000000    0.823529    help
+          dimension d     7  6.673333  5.738250  7.685042   0.237875  0.060422        1.0         0.000000    0.571429    help
+          dimension d    13  6.300000  5.384958  7.158333   0.266519  0.083968        2.0         0.000000    0.769231    help
+          dimension d    26  5.858333  4.903167  6.746792   0.270400  0.093543        2.0         0.000000    0.884615    help
+          dimension d    51  4.926667  4.364958  5.523333   0.258959  0.085298        2.0         0.000000    0.941176    help
+          dimension d   101  4.253333  3.721667  4.763333   0.252805  0.080861        1.0         0.000000    0.970297    help
+          dimension d   201  2.635000  2.133250  3.123375   0.229779  0.059215        1.0         0.000000    0.985075    help
+      class imbalance   0.5  6.035000  5.158250  6.903333   0.266315  0.089866        2.0         0.000000    0.823529    help
+      class imbalance  0.35  5.711667  4.909917  6.480000   0.246672  0.080853        2.0         0.000000    0.823529    help
+      class imbalance   0.2  5.400000  4.474875  6.226875   0.210415  0.063061        1.0         0.000000    0.820408    help
+      class imbalance   0.1  4.056667  3.281542  4.875083   0.142901  0.036125        1.0         0.000000    0.823153    help
+      class imbalance  0.05  2.990000  2.158333  3.893375   0.105321  0.019947        2.0         0.000000    0.823529    help
+      class imbalance  0.02  1.463333  0.663208  2.500042   0.066810  0.010079        0.5         0.000000    0.823597    help
+      dependence form False  6.035000  5.114958  6.933542   0.266315  0.089866        2.0         0.000000    0.823529    help
+      dependence form  True  4.313333  3.611667  5.005000   0.208628  0.064415        1.0         0.000000    0.823529    help
+   distribution shift   0.0  6.035000  5.093333  6.935042   0.266315  0.089866        2.0         0.000000    0.823529    help
+   distribution shift  0.25  6.770000  5.926583  7.626750   0.300810  0.097228        2.0         0.000000    0.823529    help
+   distribution shift   0.5  8.213333  7.355000  9.023333   0.394659  0.115844        2.0         0.000000    0.823529    help
+   distribution shift   1.0 13.098333 12.266500 13.848417   0.748392  0.176801        2.0         0.000000    0.823529    help
+   distribution shift   1.5 18.480000 17.641333 19.318333   1.292229  0.246866        2.0         0.000000    0.823529    help
+block informativeness   0.1  1.808333  1.113208  2.501708   0.041235  0.010972        1.0         0.000000    0.823529    help
+block informativeness  0.35  6.035000  5.106667  6.940000   0.266315  0.089866        2.0         0.000000    0.823529    help
+block informativeness   0.7  5.471667  4.836625  6.036667   0.459286  0.102181        2.0         0.000000    0.823529    help
+block informativeness   1.2  2.758333  2.480000  3.016708   0.374169  0.059283        2.0         0.000000    0.823529    help
+block informativeness   2.0  0.510000  0.403333  0.621667   0.102090  0.011542        2.0         0.000000    0.823529    help
+  irrelevant features     0  6.673333  5.761625  7.646708   0.237875  0.060422        1.0         0.000000    0.571429    help
+  irrelevant features     5  6.306667  5.309958  7.170083   0.271933  0.082386        2.0         0.000000    0.750000    help
+  irrelevant features    20  5.813333  4.859917  6.798417   0.271978  0.092513        2.0         0.000000    0.888889    help
+  irrelevant features    50  5.020000  4.314958  5.758542   0.260653  0.086868        1.0         0.000000    0.947368    help
+  irrelevant features   100  3.796667  3.208333  4.405083   0.259687  0.076471        1.0         0.000000    0.971963    help
+   independent signal   1.0  6.035000  5.123333  6.943542   0.266315  0.089866        2.0         0.000000    0.823529    help
+   independent signal   0.5  3.261667  2.728292  3.736833   0.352065  0.142548        1.0         0.000000    0.823529    help
+   independent signal  0.25  0.258333 -0.313333  0.680000   0.364173  0.141942        1.0         0.000000    0.823529  parity
+   independent signal   0.0 -0.520000 -0.881792 -0.205000   0.305742  0.099515        0.5         0.200000    0.858824    hurt

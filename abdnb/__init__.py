@@ -5,14 +5,25 @@ Reference implementation accompanying the paper
 Likelihood Weighting for Robust Probabilistic Classification".
 """
 
+from .baselines import TAN, KDB, AODE, WANBIA, CorrelationWeightedNB
+from .categorical import CategoricalABDNB, CategoricalNB_
 from .classifier import ABDNB, MIWeightedNB, OnlineABDNB
+from .discretize import EqualFrequencyDiscretizer
 from .dependence import dependence_matrix, class_conditional_dependence, MEASURES
 from .weights import weights_from_matrix, aggregate_dependence, WEIGHT_FUNCTIONS
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 __all__ = [
     "ABDNB",
+    "CategoricalABDNB",
+    "CategoricalNB_",
+    "TAN",
+    "KDB",
+    "AODE",
+    "WANBIA",
+    "CorrelationWeightedNB",
+    "EqualFrequencyDiscretizer",
     "MIWeightedNB",
     "OnlineABDNB",
     "dependence_matrix",

@@ -39,7 +39,7 @@ from .weights import weights_from_matrix
 __all__ = ["ABDNB", "MIWeightedNB", "OnlineABDNB"]
 
 
-class _GaussianWeightedNBBase(BaseEstimator, ClassifierMixin):
+class _GaussianWeightedNBBase(ClassifierMixin, BaseEstimator):
     """Shared Gaussian machinery for weighted NB variants."""
 
     var_smoothing = 1e-9

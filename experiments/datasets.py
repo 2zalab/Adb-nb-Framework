@@ -1,10 +1,17 @@
 """Benchmark datasets for the ABD-NB study.
 
-The suite combines four real UCI benchmarks (as distributed with
-scikit-learn), two redundancy-augmented versions of real datasets, and
-nine synthetic families with controlled dependence structure, so
-that the relation between the true dependence level and the behaviour
-of the classifiers can be analysed exactly.
+The evaluation suite is organised in three clearly separated strata, so
+that no conclusion rests on artificially constructed evidence:
+
+1. **Real-world benchmarks** (:mod:`experiments.real_datasets`): 37
+   publicly available classification datasets from 14 application
+   domains.  These carry the empirical claims of the paper.
+2. **Redundancy-augmented real datasets** (2): real data with duplicated
+   columns appended, used as a *stress test* of the duplication theory
+   on non-synthetic signal.
+3. **Controlled synthetic families** (9): generators whose dependence
+   structure is known exactly, used to *isolate the mechanism* rather
+   than to demonstrate general performance.
 """
 
 from __future__ import annotations
@@ -133,8 +140,50 @@ def sklearn_redundant(n: int = 600, seed: int = RNG):
     return X, y
 
 
+def get_synthetic_datasets() -> dict:
+    """name -> (X, y) for the nine controlled synthetic families."""
+    return {
+        "synth-rho0.0": equicorrelated_gaussian(0.0),
+        "synth-rho0.3": equicorrelated_gaussian(0.3),
+        "synth-rho0.6": equicorrelated_gaussian(0.6),
+        "synth-rho0.9": equicorrelated_gaussian(0.9),
+        "synth-blocks": block_correlated(),
+        "synth-conflict": conflict_block(),
+        "synth-classdep": class_asymmetric(),
+        "synth-nonlin": nonlinear_dependent(),
+        "synth-sklearn": sklearn_redundant(),
+    }
+
+
+def get_augmented_datasets() -> dict:
+    """name -> (X, y) for the two redundancy-augmented real datasets."""
+    iris, wine = load_iris(), load_wine()
+    return {
+        "iris-red": (_add_redundant_copies(iris.data, 2, 0.10, 1), iris.target),
+        "wine-red": (_add_redundant_copies(wine.data, 2, 0.10, 2), wine.target),
+    }
+
+
+def get_all_datasets() -> dict:
+    """The complete evaluation suite: real, augmented and synthetic."""
+    from experiments.real_datasets import get_real_datasets
+    data = dict(get_real_datasets())
+    data.update(get_augmented_datasets())
+    data.update(get_synthetic_datasets())
+    return data
+
+
+def dataset_stratum(name: str) -> str:
+    """'real', 'augmented' or 'synthetic' -- used by every results table."""
+    if name.startswith("synth-"):
+        return "synthetic"
+    if name.endswith("-red"):
+        return "augmented"
+    return "real"
+
+
 def get_datasets() -> dict:
-    """name -> (X, y) for the main benchmark."""
+    """Legacy 15-setting suite kept so earlier results remain reproducible."""
     iris = load_iris()
     wine = load_wine()
     bc = load_breast_cancer()

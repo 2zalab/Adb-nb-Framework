@@ -40,6 +40,9 @@ __all__ = [
     "dependence_matrix",
     "class_conditional_dependence",
     "MEASURES",
+    "DISCRETE_MEASURES",
+    "discrete_dependence_matrix",
+    "class_conditional_discrete_dependence",
 ]
 
 MEASURES = ("pearson", "spearman", "kendall", "mi", "dcor", "hsic", "cramersv")
@@ -298,5 +301,64 @@ def class_conditional_dependence(
             mats[c] = dependence_matrix(
                 X[y == c], measure, threshold, alpha, random_state
             )
+    pooled = np.sum([p * mats[c] for p, c in zip(priors, classes)], axis=0)
+    return mats, pooled
+
+
+# ---------------------------------------------------------------------------
+# Discrete (categorical) features
+# ---------------------------------------------------------------------------
+
+DISCRETE_MEASURES = ("cramersv", "mi")
+
+
+def discrete_dependence_matrix(
+    Xd: np.ndarray,
+    measure: str = "cramersv",
+    threshold: bool = True,
+    alpha: float = 0.05,
+) -> np.ndarray:
+    """Pairwise dependence between *already discrete* columns.
+
+    Unlike :func:`dependence_matrix`, no quantile binning is applied: the
+    integer codes are used as they are, which is the correct estimand for
+    genuinely categorical features (multinomial or Bernoulli factors).
+    """
+    Xd = np.asarray(Xd)
+    n, d = Xd.shape
+    fun = _cramers_v if measure == "cramersv" else _normalised_mi
+    D = np.zeros((d, d))
+    for i in range(d):
+        for j in range(i + 1, d):
+            D[i, j] = D[j, i] = fun(Xd[:, i], Xd[:, j])
+    D = np.clip(D, 0.0, 1.0)
+    if threshold and n > 4:
+        t_n = min(stats.norm.ppf(1 - alpha / 2) / np.sqrt(max(n - 3, 1)), 0.5)
+        D = np.where(D > t_n, (D - t_n) / (1.0 - t_n), 0.0)
+    np.fill_diagonal(D, 0.0)
+    return D
+
+
+def class_conditional_discrete_dependence(
+    Xd: np.ndarray,
+    y: np.ndarray,
+    measure: str = "cramersv",
+    threshold: bool = True,
+    alpha: float = 0.05,
+    min_class_size: int = 12,
+) -> tuple[dict, np.ndarray]:
+    """Class-conditional and pooled dependence for discrete features."""
+    Xd = np.asarray(Xd)
+    y = np.asarray(y)
+    classes, counts = np.unique(y, return_counts=True)
+    priors = counts / counts.sum()
+    fallback = discrete_dependence_matrix(Xd, measure, threshold, alpha)
+    mats = {}
+    for c, nc in zip(classes, counts):
+        if nc < min_class_size:
+            mats[c] = fallback.copy()
+        else:
+            mats[c] = discrete_dependence_matrix(Xd[y == c], measure,
+                                                 threshold, alpha)
     pooled = np.sum([p * mats[c] for p, c in zip(priors, classes)], axis=0)
     return mats, pooled
