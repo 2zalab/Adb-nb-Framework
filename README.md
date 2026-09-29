@@ -3,8 +3,7 @@
 Reference implementation of **Adaptive Bayesian Dependence Naive Bayes**
 (scikit-learn compatible) and all experiments of the paper
 *"Correcting Redundant Evidence in Naïve Bayes: Dependence-Adaptive
-Likelihood Weighting with Finite-Sample Analysis"*
-(Knowledge-Based Systems, KNOSYS-D-26-21554).
+Likelihood Weighting with Finite-Sample Analysis"*.
 
 ## Installation
 
