@@ -100,10 +100,19 @@ def table_ranks():
 def table_wilcoxon():
     w = load_csv("stats_wilcoxon")
     wl = load_csv("stats_wilcoxon_logloss").set_index("opponent")
-    order = ["GNB", "MI-WNB", "CW-NB", "WANBIA", "ABD-NB-L", "ABD-NB-G",
-             "ABD-NB-C", "TAN", "KDB", "AODE", "GNB-Platt", "GNB-Iso",
-             "LR", "kNN", "CART", "RF", "XGB", "LGBM", "SVM"]
+    # Grouped by family, then as Section 6.2 lists them.  Any opponent the
+    # statistics file carries but this order forgets is appended rather than
+    # silently dropped: an earlier version of this list predated HNB and CFW
+    # and quietly omitted both from the table while the text counted them.
+    order = ["GNB", "MI-WNB", "CW-NB", "CFW-NB", "WANBIA", "ABD-NB-L",
+             "ABD-NB-G", "ABD-NB-C", "TAN", "KDB", "AODE", "HNB",
+             "GNB-Platt", "GNB-Iso", "LR", "kNN", "CART", "RF", "XGB",
+             "LGBM", "SVM"]
     w = w.set_index("opponent")
+    missing = [m for m in w.index if m not in order]
+    if missing:
+        print(f"  [warn] opponents absent from the table order, appended: {missing}")
+        order = order + missing
     lines = []
     for m in order:
         if m not in w.index:
@@ -239,18 +248,161 @@ def table_gamma_selection():
                      f"{r['real']:.1f} & {r['augmented']:.1f} & {r['synthetic']:.1f} \\\\")
     _write("gamma_marginal", "\n".join(lines))
 
+    resc = load_csv("gamma_selection_rescale")
+    _write("gamma_rescale", "\n".join(
+        f"\t\t\t{r['rule']} & {int(r['n_fits'])} & {r['all']:.1f} & {r['real']:.1f} \\\\"
+        for _, r in resc.iterrows()))
+
     bands = load_csv("gamma_selection_bands")
+    has_meff = "meff_pct" in bands.columns
     lines = []
     for _, r in bands.iterrows():
+        extra = f" & {r['meff_pct']:.1f}" if has_meff else ""
         lines.append(f"\t\t\t{r['band']} & {int(r['n_datasets'])} & "
                      f"{r['zero_pct']:.1f} & {r['ge1_pct']:.1f} & "
-                     f"{r['cls_pct']:.1f} & {r['deff_ratio']:.2f} \\\\")
+                     f"{r['cls_pct']:.1f}{extra} & {r['deff_ratio']:.2f} \\\\")
     _write("gamma_bands", "\n".join(lines))
 
 
-ALL = [table_nb_family, table_ranks, table_wilcoxon, table_composition,
+def table_ablation_components():
+    s = load_csv("ablation_components_summary")
+    lines = []
+    for _, r in s.iterrows():
+        lines.append(f"\t\t\t{r['config']} & {r['acc_rank']:.2f} & {r['ll_rank']:.2f} & "
+                     f"{r['d_acc_mean']:+.2f} & {r['d_acc_worst']:+.2f} & "
+                     f"{r['d_ll_median']:+.1f} & {int(r['wins'])}/{int(r['losses'])} \\\\")
+    _write("ablation_components", "\n".join(lines))
+
+
+def table_redundancy_measures():
+    s = load_csv("redundancy_measures_stats")
+    lines = []
+    for _, r in s.iterrows():
+        lines.append(f"\t\t\t{_esc(r['measure'])} & {r['mean_R']:.3f} & {r['rho_acc']:.3f} & "
+                     f"{r['p_acc']:.3f} & {r['rho_ll']:.3f} & {r['p_ll']:.1e} & "
+                     f"[{r['ci_lo']:.2f}, {r['ci_hi']:.2f}] \\\\")
+    _write("redundancy_measures", "\n".join(lines))
+
+    st = load_csv("redundancy_stability")
+    cols = [c for c in st.columns if c.startswith("R_n")]
+    lines = [f"\t\t\tbootstrap SD of $R$ & {st['boot_sd'].median():.4f} \\\\",
+             f"\t\t\tbootstrap CV of $R$ & {st['boot_cv'].median():.3f} \\\\",
+             f"\t\t\tsplit-half $|\\Delta R|$ & {st['splithalf_absdiff'].median():.4f} \\\\"]
+    for c in sorted(cols, key=lambda x: int(x[3:])):
+        nn = int(c[3:])
+        b = st[f"bias_n{nn}"].dropna()
+        if len(b):
+            lines.append(f"\t\t\tbias of $R$ at $n={nn}$ & {b.median():+.4f} \\\\")
+    _write("redundancy_stability", "\n".join(lines))
+
+
+def table_higher_order():
+    s = load_csv("higher_order_summary")
+    lines = []
+    for _, r in s.iterrows():
+        lines.append(f"\t\t\t{_esc(r['design'])} & {r['max_rho']:.3f} & {r['max_mi']:.3f} & "
+                     f"{r['gamma']:.2f} & {r['deff_ratio']:.2f} & "
+                     f"{100*r['nb']:.1f} & {100*r['abd']:.1f} & {100*r['aode']:.1f} & "
+                     f"{100*r['rf']:.1f} & {r['d_acc']:+.2f} \\\\")
+    _write("higher_order", "\n".join(lines))
+
+
+def table_scalability():
+    f = load_csv("scalability_exponents")
+    lines = []
+    for _, r in f.iterrows():
+        lines.append(f"\t\t\t${r['axis']}$ & {_esc(r['model'])} & {r['exponent']:.2f} & "
+                     f"{r['exponent_asym']:.2f} & {r['t_min_ms']:.0f} & {r['t_max_ms']:.0f} \\\\")
+    _write("scalability_cost", "\n".join(lines))
+
+    full = load_csv("scalability_full")
+    acc = full.pivot_table("accuracy", "dataset", "model")
+    ll = full.pivot_table("log_loss", "dataset", "model")
+    ft = full.pivot_table("fit_time", "dataset", "model")
+    meta = full.groupby("dataset")[["n", "d"]].first()
+    lines = []
+    for ds in acc.index:
+        best = acc.loc[ds].max()
+        cells = []
+        for m in ("GNB", "ABD-NB", "AODE", "LGBM"):
+            v = f"{100*acc.loc[ds, m]:.1f}"
+            if acc.loc[ds, m] >= best - 1e-12:
+                v = f"\\textbf{{{v}}}"
+            cells.append(v)
+        dll = 100 * (ll.loc[ds, "GNB"] - ll.loc[ds, "ABD-NB"]) / ll.loc[ds, "GNB"]
+        lines.append(f"\t\t\t{_esc(ds)} & {int(meta.loc[ds,'n'])} & {int(meta.loc[ds,'d'])} & "
+                     + " & ".join(cells) + f" & {dll:+.1f} & {ft.loc[ds,'ABD-NB']:.2f} \\\\")
+    _write("scalability_full", "\n".join(lines))
+
+
+def table_degeneracy():
+    """Why the Gaussian instantiation fails where it fails."""
+    dg = load_csv("degeneracy").set_index("dataset")
+    full = load_csv("scalability_full")
+    acc = full.pivot_table("accuracy", "dataset", "model") * 100
+    order = ["kr-vs-kp", "ann-thyroid", "nursery", "coil2000",
+             "pendigits", "letter", "texture-full"]
+    alias = {"nursery": "nursery-full"}
+    lines = []
+    for ds in order:
+        if ds not in dg.index:
+            continue
+        r = dg.loc[ds]
+        key = alias.get(ds, ds)
+        if key in acc.index:
+            cells = [f"{acc.loc[key, m]:.1f}" for m in ("GNB", "ABD-NB", "AODE")]
+        else:
+            cells = ["---"] * 3
+        lines.append(
+            f"\t\t\t{_esc(ds)} & {int(r['d'])} & {int(r['binary'])} & "
+            f"{r['median_levels']:.0f} & {int(r['features_constant_in_some_class'])} & "
+            + " & ".join(cells) + " \\\\")
+    _write("degeneracy", "\n".join(lines))
+
+
+def table_stages():
+    """Per-stage cost, which is what tests the complexity analysis directly."""
+    st = load_csv("scalability_stages")
+    lines = []
+    for axis, var, other in (("n", "n", "d"), ("d", "d", "n")):
+        sub = st[st["axis"] == axis].sort_values(var)
+        for _, r in sub.iterrows():
+            lines.append(
+                f"\t\t\t${axis}={int(r[var])}$ & {1000*r['dependence']:.1f} & "
+                f"{1000*r['eigendecomposition']:.2f} & "
+                f"{1000*r['gaussian_statistics']:.1f} & "
+                f"{100*r['eigendecomposition']/r['dependence']:.2f} \\\\")
+        e = sub.iloc[0]
+        lines.append(
+            f"\t\t\t\\emph{{exponent in }}${axis}$ & "
+            f"{e['dependence_exponent']:.2f} & {e['eigendecomposition_exponent']:.2f} & "
+            f"{e['gaussian_statistics_exponent']:.2f} & --- \\\\")
+        if axis == "n":
+            lines.append("\t\t\t\\midrule")
+    _write("scalability_stages", "\n".join(lines))
+
+
+def table_tuned():
+    s = load_csv("tuned_baselines_summary")
+    piv = s.pivot_table(index="model", values=["acc_mean", "acc_rank", "ll_rank",
+                                               "fit_time"], columns="protocol")
+    order = piv[("acc_rank", "tuned")].sort_values().index
+    lines = []
+    for m in order:
+        lines.append(
+            f"\t\t\t{_esc(m)} & {piv.loc[m,('acc_mean','default')]:.2f} & "
+            f"{piv.loc[m,('acc_mean','tuned')]:.2f} & "
+            f"{piv.loc[m,('acc_rank','default')]:.2f} & {piv.loc[m,('acc_rank','tuned')]:.2f} & "
+            f"{piv.loc[m,('ll_rank','default')]:.2f} & {piv.loc[m,('ll_rank','tuned')]:.2f} & "
+            f"{piv.loc[m,('fit_time','tuned')]:.2f} \\\\")
+    _write("tuned_baselines", "\n".join(lines))
+
+
+ALL = [table_stages, table_degeneracy, table_nb_family, table_ranks, table_wilcoxon, table_composition,
        table_conditions, table_redundancy_bands, table_categorical,
-       table_finite_sample, table_gamma_selection]
+       table_finite_sample, table_gamma_selection,
+       table_ablation_components, table_redundancy_measures,
+       table_higher_order, table_scalability, table_tuned]
 
 if __name__ == "__main__":
     for f in ALL:

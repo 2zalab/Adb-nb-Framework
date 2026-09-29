@@ -5,7 +5,7 @@ Reference implementation accompanying the paper
 Likelihood Weighting for Robust Probabilistic Classification".
 """
 
-from .baselines import TAN, KDB, AODE, WANBIA, CorrelationWeightedNB
+from .baselines import TAN, KDB, AODE, HNB, WANBIA, CorrelationWeightedNB, CFWNB
 from .categorical import CategoricalABDNB, CategoricalNB_
 from .classifier import ABDNB, MIWeightedNB, OnlineABDNB
 from .discretize import EqualFrequencyDiscretizer
@@ -21,6 +21,8 @@ __all__ = [
     "TAN",
     "KDB",
     "AODE",
+    "HNB",
+    "CFWNB",
     "WANBIA",
     "CorrelationWeightedNB",
     "EqualFrequencyDiscretizer",

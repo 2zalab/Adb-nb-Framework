@@ -86,10 +86,16 @@ def main(metric: str = "accuracy", flagship: str = "ABD-NB",
         rows.append({"opponent": m, "median_diff": float(d.median()),
                      "wins": int((d > 1e-12).sum()), "ties": int((d.abs() <= 1e-12).sum()),
                      "losses": int((d < -1e-12).sum()), "p_raw": pv})
+    # Holm step-down over the whole family of opponents.  The adjusted
+    # p-values must be non-decreasing along the sorted order: without the
+    # running maximum an adjusted value can fall below the one before it,
+    # which is anti-conservative and is not Holm's procedure.
     order = np.argsort(pvals)
     holm = np.empty(len(pvals))
+    running = 0.0
     for rank_i, idx in enumerate(order):
-        holm[idx] = min(1.0, pvals[idx] * (len(pvals) - rank_i))
+        running = max(running, pvals[idx] * (len(pvals) - rank_i))
+        holm[idx] = min(1.0, running)
     for r, h in zip(rows, holm):
         r["p_holm"] = float(h)
     out = pd.DataFrame(rows).sort_values("p_holm")

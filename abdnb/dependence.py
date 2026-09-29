@@ -243,6 +243,12 @@ def dependence_matrix(
     n = X.shape[0]
     if measure not in _MATRIX_FUN:
         raise ValueError(f"unknown measure {measure!r}; choose from {MEASURES}")
+    if X.ndim < 2 or X.shape[1] < 2:
+        # a single feature has no pairwise dependence, so the matrix is the
+        # 1x1 zero matrix and the weights it induces are exactly one: the
+        # correction degenerates to naive Bayes, which is the intended
+        # fallback rather than an error
+        return np.zeros((X.shape[1] if X.ndim == 2 else 1,) * 2)
     kwargs = {}
     if measure in ("dcor", "hsic"):
         kwargs["rng"] = np.random.default_rng(random_state)

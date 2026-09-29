@@ -20,7 +20,9 @@ from __future__ import annotations
 import numpy as np
 from scipy.special import logsumexp
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
+from sklearn.utils.multiclass import check_classification_targets
+from sklearn.utils.validation import (check_X_y, check_array, check_is_fitted,
+                                      validate_data)
 
 from .dependence import class_conditional_discrete_dependence
 from .discretize import EqualFrequencyDiscretizer
@@ -44,7 +46,7 @@ class CategoricalABDNB(ClassifierMixin, BaseEstimator):
                  measure: str = "cramersv", weight_fn: str = "harmonic",
                  gamma="auto", kappa: float = 2.0, class_specific="auto",
                  aggregation: str = "mean", threshold: bool = True,
-                 dep_alpha: float = 0.05, rescale: str = "meff",
+                 dep_alpha: float = 0.05, rescale: str = "auto",
                  tune_grid=None, tune_cv: int = 3, random_state: int | None = 0):
         self.n_bins = n_bins
         self.alpha = alpha
@@ -87,18 +89,23 @@ class CategoricalABDNB(ClassifierMixin, BaseEstimator):
 
     # -- weights ------------------------------------------------------
 
-    def _make_weights(self, mats, pooled, gamma, class_specific):
+    _RESCALES = ("meff", "none")
+
+    def _make_weights(self, mats, pooled, gamma, class_specific, rescale=None):
         K = len(self.classes_)
+        rescale = self.rescale if rescale is None else rescale
+        if rescale == "auto":
+            rescale = "meff"
         if class_specific:
             W = np.vstack([
                 weights_from_matrix(mats[c], self.weight_fn, gamma,
-                                    self.aggregation, self.rescale, self.kappa)
+                                    self.aggregation, rescale, self.kappa)
                 for c in self.classes_])
             target = float(self.class_prior_ @ W.sum(axis=1))
             W = W * (target / W.sum(axis=1, keepdims=True))
         else:
             w = weights_from_matrix(pooled, self.weight_fn, gamma,
-                                    self.aggregation, self.rescale, self.kappa)
+                                    self.aggregation, rescale, self.kappa)
             W = np.tile(w, (K, 1))
         return W
 
@@ -107,7 +114,9 @@ class CategoricalABDNB(ClassifierMixin, BaseEstimator):
         gammas = grid if self.gamma == "auto" else (float(self.gamma),)
         structures = (False, True) if self.class_specific == "auto" \
             else (bool(self.class_specific),)
-        return [(g, s) for g in gammas for s in structures if not (g == 0.0 and s)]
+        rescales = self._RESCALES if self.rescale == "auto" else (self.rescale,)
+        return [(g, s, r) for g in gammas for s in structures for r in rescales
+                if not (g == 0.0 and (s or r != rescales[0]))]
 
     def _tune(self, X, y, configs, acc_tol: float = 0.01):
         from sklearn.model_selection import StratifiedKFold
@@ -119,8 +128,9 @@ class CategoricalABDNB(ClassifierMixin, BaseEstimator):
         for tr, va in skf.split(X, y):
             n_folds += 1
             sub = CategoricalABDNB(**{**self.get_params(), "gamma": 0.0,
-                                      "class_specific": False})
-            sub.fit_configured(X[tr], y[tr], 0.0, False)
+                                      "class_specific": False,
+                                      "rescale": "none"})
+            sub.fit_configured(X[tr], y[tr], 0.0, False, "none")
             ll = sub._feature_log_likelihood(sub.disc_.transform(X[va]))
             yva = np.searchsorted(sub.classes_, y[va])
             logprior = np.log(sub.class_prior_)
@@ -132,11 +142,12 @@ class CategoricalABDNB(ClassifierMixin, BaseEstimator):
                 nll[cfg] += float(-lp[np.arange(len(yva)), yva].mean())
         best = max(acc.values())
         admissible = [c for c in configs if acc[c] >= best - acc_tol * n_folds]
-        return min(admissible, key=lambda c: (nll[c], c[0]))
+        return min(admissible, key=lambda c: (nll[c], c[0], c[1], c[2] != "none"))
 
     # -- public API ---------------------------------------------------
 
-    def fit_configured(self, X, y, gamma: float, class_specific: bool):
+    def fit_configured(self, X, y, gamma: float, class_specific: bool,
+                       rescale: str | None = None):
         self.disc_ = EqualFrequencyDiscretizer(self.n_bins)
         Xd = self.disc_.fit_transform(X)
         self.n_levels_ = self.disc_.n_levels_
@@ -144,26 +155,33 @@ class CategoricalABDNB(ClassifierMixin, BaseEstimator):
         mats, pooled = class_conditional_discrete_dependence(
             Xd, y, self.measure, self.threshold, self.dep_alpha)
         self.dependence_, self.pooled_dependence_ = mats, pooled
-        self.weights_ = self._make_weights(mats, pooled, gamma, class_specific)
+        self.weights_ = self._make_weights(mats, pooled, gamma, class_specific,
+                                           rescale)
         self.gamma_, self.class_specific_ = gamma, class_specific
+        self.rescale_ = (self.rescale if rescale is None else rescale)
+        if self.rescale_ == "auto":
+            self.rescale_ = "meff"
         self.effective_dimension_ = self.weights_.sum(axis=1)
         return self
 
     def fit(self, X, y):
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
         configs = self._candidate_configs()
-        gamma, cs = self._tune(X, y, configs) if len(configs) > 1 else configs[0]
-        return self.fit_configured(X, y, gamma, cs)
+        gamma, cs, resc = (self._tune(X, y, configs) if len(configs) > 1
+                           else configs[0])
+        return self.fit_configured(X, y, gamma, cs, resc)
 
     def _joint_log_likelihood(self, X):
         check_is_fitted(self, "weights_")
-        Xd = self.disc_.transform(check_array(X))
+        Xd = self.disc_.transform(validate_data(self, X, reset=False))
         ll = self._feature_log_likelihood(Xd)
         return np.log(self.class_prior_)[None] + np.einsum("nkd,kd->nk", ll,
                                                            self.weights_)
 
     def predict(self, X):
-        return self.classes_[np.argmax(self._joint_log_likelihood(X), axis=1)]
+        jll = self._joint_log_likelihood(X)
+        return self.classes_[np.argmax(jll, axis=1)]
 
     def predict_proba(self, X):
         jll = self._joint_log_likelihood(X)

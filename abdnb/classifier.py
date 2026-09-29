@@ -31,12 +31,26 @@ import numpy as np
 from scipy.special import logsumexp
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.feature_selection import mutual_info_classif
-from sklearn.utils.validation import check_is_fitted, check_X_y, check_array
+from sklearn.utils.multiclass import check_classification_targets
+from sklearn.utils.validation import (check_is_fitted, check_X_y, check_array,
+                                      validate_data)
 
 from .dependence import dependence_matrix, class_conditional_dependence
 from .weights import weights_from_matrix
 
 __all__ = ["ABDNB", "MIWeightedNB", "OnlineABDNB"]
+
+
+def _check_predict_input(est, X, *, fitted_attr):
+    """Validate an estimator's prediction input.
+
+    scikit-learn's estimator contract asks for two checks before a
+    prediction: that the estimator is fitted, and that the input has the
+    same number of features as the training data.  Both are collected
+    here so every estimator in the package makes them identically.
+    """
+    check_is_fitted(est, fitted_attr)
+    return validate_data(est, X, reset=False)
 
 
 class _GaussianWeightedNBBase(ClassifierMixin, BaseEstimator):
@@ -46,6 +60,10 @@ class _GaussianWeightedNBBase(ClassifierMixin, BaseEstimator):
 
     def _fit_gaussians(self, X, y):
         self.classes_, counts = np.unique(y, return_counts=True)
+        if len(self.classes_) < 2:
+            raise ValueError(
+                f"{type(self).__name__} needs at least two classes to fit; "
+                f"the training labels contain 1 class")
         n, d = X.shape
         self.n_features_in_ = d
         self.class_prior_ = counts / n
@@ -71,8 +89,7 @@ class _GaussianWeightedNBBase(ClassifierMixin, BaseEstimator):
         return np.log(self.class_prior_)[None] + np.einsum("nkd,kd->nk", ll, W)
 
     def predict_log_proba(self, X):
-        check_is_fitted(self, "theta_")
-        X = check_array(X)
+        X = _check_predict_input(self, X, fitted_attr="theta_")
         jll = self._joint_log_likelihood(X)
         return jll - logsumexp(jll, axis=1, keepdims=True)
 
@@ -80,8 +97,7 @@ class _GaussianWeightedNBBase(ClassifierMixin, BaseEstimator):
         return np.exp(self.predict_log_proba(X))
 
     def predict(self, X):
-        check_is_fitted(self, "theta_")
-        X = check_array(X)
+        X = _check_predict_input(self, X, fitted_attr="theta_")
         return self.classes_[np.argmax(self._joint_log_likelihood(X), axis=1)]
 
 
@@ -110,7 +126,13 @@ class ABDNB(_GaussianWeightedNBBase):
     threshold : apply the asymptotic soft-threshold to the dependence
         estimates (variance reduction in small samples).
     rescale : weight rescaling rule -- 'meff' (spectral effective
-        dimension, default), 'dim' (sum to d) or 'none' (raw weights).
+        dimension), 'dim' (sum to d), 'none' (raw weights), or 'auto'
+        (default): the rule is selected on internal validation jointly
+        with gamma and the weight structure.  The component ablation of
+        the paper shows that pinning the evidence mass to M_eff is
+        accuracy-neutral but costs calibration on a majority of
+        datasets, so whether to restore the scale is a question the data
+        should answer rather than a fixed design choice.
     tune_grid : gamma grid for 'auto' (default (0, 0.25, 0.5, 1, 2, 4)).
     tune_cv : internal folds for 'auto' (default 3).
     """
@@ -127,7 +149,7 @@ class ABDNB(_GaussianWeightedNBBase):
         aggregation: str = "mean",
         threshold: bool = True,
         alpha: float = 0.05,
-        rescale: str = "meff",
+        rescale: str = "auto",
         tune_grid=None,
         tune_cv: int = 3,
         var_smoothing: float = 1e-9,
@@ -155,14 +177,18 @@ class ABDNB(_GaussianWeightedNBBase):
             random_state=self.random_state,
         )
 
-    def _make_weights(self, mats, pooled, classes, prior, gamma, class_specific):
+    def _make_weights(self, mats, pooled, classes, prior, gamma, class_specific,
+                      rescale=None):
         K = len(classes)
+        rescale = self.rescale if rescale is None else rescale
+        if rescale == "auto":                  # a concrete rule is needed here
+            rescale = "meff"
         if class_specific:
             W = np.vstack(
                 [
                     weights_from_matrix(
                         mats[c], self.weight_fn, gamma,
-                        self.aggregation, self.rescale, self.kappa,
+                        self.aggregation, rescale, self.kappa,
                     )
                     for c in classes
                 ]
@@ -176,9 +202,11 @@ class ABDNB(_GaussianWeightedNBBase):
             W = W * (target / W.sum(axis=1, keepdims=True))
         else:
             w = weights_from_matrix(pooled, self.weight_fn, gamma,
-                                    self.aggregation, self.rescale, self.kappa)
+                                    self.aggregation, rescale, self.kappa)
             W = np.tile(w, (K, 1))
         return W
+
+    _RESCALES = ("meff", "none")
 
     def _candidate_configs(self):
         grid = tuple(self.tune_grid) if self.tune_grid is not None else self._DEFAULT_GRID
@@ -187,7 +215,11 @@ class ABDNB(_GaussianWeightedNBBase):
             structures = (False, True)
         else:
             structures = (bool(self.class_specific),)
-        return [(g, s) for g in gammas for s in structures if not (g == 0.0 and s)]
+        rescales = self._RESCALES if self.rescale == "auto" else (self.rescale,)
+        # at gamma = 0 the weights are identically one, so the structure and
+        # the rescaling rule are immaterial: keep a single representative
+        return [(g, s, r) for g in gammas for s in structures for r in rescales
+                if not (g == 0.0 and (s or r != rescales[0]))]
 
     def _tune(self, X, y, configs, acc_tol: float = 0.01):
         """Internal CV selection with a one-percentage-point tolerance
@@ -207,8 +239,8 @@ class ABDNB(_GaussianWeightedNBBase):
         for tr, va in skf.split(X, y):
             n_folds += 1
             sub = ABDNB(**{**self.get_params(), "gamma": 0.0,
-                           "class_specific": False})
-            sub.fit_configured(X[tr], y[tr], 0.0, False)  # fits Gaussians + dependence
+                           "class_specific": False, "rescale": "none"})
+            sub.fit_configured(X[tr], y[tr], 0.0, False, "none")
             mats, pooled = sub.dependence_, sub.pooled_dependence_
             ll = sub._feature_log_likelihood(X[va])
             yva = np.searchsorted(sub.classes_, y[va])
@@ -223,32 +255,41 @@ class ABDNB(_GaussianWeightedNBBase):
         best_acc = max(acc.values())
         admissible = [c for c in configs
                       if acc[c] >= best_acc - acc_tol * n_folds]
-        return min(admissible, key=lambda c: (nll[c], c[0]))
+        # ties break towards the smallest gamma, then the simpler structure,
+        # then the un-rescaled rule, i.e. towards plain naive Bayes
+        return min(admissible, key=lambda c: (nll[c], c[0], c[1],
+                                              c[2] != "none"))
 
     # -- public API ---------------------------------------------------
 
-    def fit_configured(self, X, y, gamma: float, class_specific: bool):
-        """Fit with an explicit (gamma, class_specific) configuration."""
+    def fit_configured(self, X, y, gamma: float, class_specific: bool,
+                       rescale: str | None = None):
+        """Fit with an explicit (gamma, class_specific, rescale) configuration."""
         self._fit_gaussians(X, y)
         mats, pooled = self._dependence(X, y)
         self.dependence_ = mats
         self.pooled_dependence_ = pooled
         self.weights_ = self._make_weights(
-            mats, pooled, self.classes_, self.class_prior_, gamma, class_specific
+            mats, pooled, self.classes_, self.class_prior_, gamma, class_specific,
+            rescale
         )
         self.gamma_ = gamma
         self.class_specific_ = class_specific
+        self.rescale_ = (self.rescale if rescale is None else rescale)
+        if self.rescale_ == "auto":
+            self.rescale_ = "meff"
         self.effective_dimension_ = self.weights_.sum(axis=1)
         return self
 
     def fit(self, X, y):
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
         configs = self._candidate_configs()
         if len(configs) > 1:
-            gamma, cs = self._tune(X, y, configs)
+            gamma, cs, resc = self._tune(X, y, configs)
         else:
-            gamma, cs = configs[0]
-        return self.fit_configured(X, y, gamma, cs)
+            gamma, cs, resc = configs[0]
+        return self.fit_configured(X, y, gamma, cs, resc)
 
 
 class MIWeightedNB(_GaussianWeightedNBBase):
@@ -268,6 +309,7 @@ class MIWeightedNB(_GaussianWeightedNBBase):
 
     def fit(self, X, y):
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
         self._fit_gaussians(X, y)
         mi = mutual_info_classif(X, y, random_state=self.random_state)
         w = mi / mi.max() if mi.max() > 0 else np.ones_like(mi)

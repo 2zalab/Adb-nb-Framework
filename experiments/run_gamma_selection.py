@@ -35,7 +35,8 @@ def _fold(dname, X, y, tr, fold):
     clf = ABDNB().fit(X[tr], y[tr])
     return {"dataset": dname, "stratum": dataset_stratum(dname), "fold": fold,
             "gamma": float(clf.gamma_), "class_specific": int(clf.class_specific_),
-            "d": X.shape[1], "d_eff": float(np.mean(clf.effective_dimension_))}
+            "rescale": clf.rescale_, "d": X.shape[1],
+            "d_eff": float(np.mean(clf.effective_dimension_))}
 
 
 def main(n_splits: int = 10, n_repeats: int = 3, seed: int = 7, n_jobs: int = 4):
@@ -68,6 +69,15 @@ def main(n_splits: int = 10, n_repeats: int = 3, seed: int = 7, n_jobs: int = 4)
     marg = pd.DataFrame(tab)
     save_csv(marg, "gamma_selection_marginal")
 
+    resc = pd.DataFrame([{
+        "rule": r,
+        "all": 100 * (df["rescale"] == r).mean(),
+        "real": 100 * (df[df["stratum"] == "real"]["rescale"] == r).mean(),
+        "n_fits": int((df["rescale"] == r).sum()),
+    } for r in ("meff", "none")])
+    save_csv(resc, "gamma_selection_rescale")
+    print(); print(resc.round(1).to_string(index=False))
+
     # stratified by the redundancy index of the dataset
     prof = load_csv("redundancy_profile").set_index("dataset")
     real = df[df["dataset"].isin(prof.index)].copy()
@@ -83,6 +93,7 @@ def main(n_splits: int = 10, n_repeats: int = 3, seed: int = 7, n_jobs: int = 4)
                "zero_pct": 100 * (sub["gamma"] == 0).mean(),
                "ge1_pct": 100 * (sub["gamma"] >= 1).mean(),
                "cls_pct": 100 * sub["class_specific"].mean(),
+               "meff_pct": 100 * (sub["rescale"] == "meff").mean(),
                "deff_ratio": (sub["d_eff"] / sub["d"]).mean()}
         bands.append(row)
     band_df = pd.DataFrame(bands)

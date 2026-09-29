@@ -99,11 +99,21 @@ def new_fig(width=3.45, height=2.3, ncols=1, nrows=1, **kw):
     return fig, axes
 
 
-def save_fig(fig, name: str) -> str:
-    path = os.path.join(FIGURES, name if name.endswith(".pdf") else name + ".pdf")
+#: Knowledge-Based Systems asks for raster figures at 300 dpi rather than
+#: PDF, so every figure is written twice: a vector copy for the LaTeX
+#: build and a 300 dpi PNG for the submission package.
+PNG_DIR = os.path.join(HERE, "..", "figures-300dpi")
+os.makedirs(PNG_DIR, exist_ok=True)
+
+
+def save_fig(fig, name: str, dpi: int = 300) -> str:
+    stem = name[:-4] if name.endswith(".pdf") else name
+    path = os.path.join(FIGURES, stem + ".pdf")
     fig.savefig(path, bbox_inches="tight", pad_inches=0.02)
+    fig.savefig(os.path.join(PNG_DIR, stem + ".png"), bbox_inches="tight",
+                pad_inches=0.02, dpi=dpi)
     plt.close(fig)
-    print(f"  [fig] {os.path.basename(path)}")
+    print(f"  [fig] {os.path.basename(path)} (+ 300 dpi png)")
     return path
 
 

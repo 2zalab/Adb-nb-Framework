@@ -9,15 +9,17 @@ explicitly instead of correcting for it:
 - :class:`TAN`  : tree-augmented naive Bayes (Friedman, Geiger & Goldszmidt, 1997)
 - :class:`KDB`  : k-dependence Bayesian classifier (Sahami, 1996)
 - :class:`AODE` : averaged one-dependence estimators (Webb, Boughton & Wang, 2005)
+- :class:`HNB`  : hidden naive Bayes (Jiang, Zhang & Cai, 2009)
 
 *Feature-weighted naive Bayes* -- they keep the factorisation and learn
 one exponent per feature:
 
 - :class:`WANBIA` : discriminative weight optimisation of the conditional
   log-likelihood (Zaidi, Cerquides, Carman & Webb, 2013)
-- :class:`CorrelationWeightedNB` : the relevance/redundancy heuristic of
-  the correlation-based weighting literature (a filter counterpart of
-  ABD-NB whose redundancy term is a *marginal* discount)
+- :class:`CFWNB` : the correlation-based feature weighting filter
+  (Jiang, Zhang, Li & Wu, 2019), the reference relevance/redundancy filter
+- :class:`CorrelationWeightedNB` : a simpler relevance/redundancy
+  heuristic of the same family, retained as an ablation of CFW's sigmoid
 
 All three structure-extending models operate on equal-frequency
 discretised features with Laplace smoothing, following the standard
@@ -30,11 +32,13 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.special import logsumexp
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
+from sklearn.utils.multiclass import check_classification_targets
+from sklearn.utils.validation import (check_X_y, check_array, check_is_fitted,
+                                      validate_data)
 
 from .discretize import EqualFrequencyDiscretizer
 
-__all__ = ["TAN", "KDB", "AODE", "WANBIA", "CorrelationWeightedNB"]
+__all__ = ["TAN", "KDB", "AODE", "HNB", "WANBIA", "CorrelationWeightedNB", "CFWNB"]
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +47,11 @@ __all__ = ["TAN", "KDB", "AODE", "WANBIA", "CorrelationWeightedNB"]
 
 class _DiscreteBayesBase(ClassifierMixin, BaseEstimator):
     """Discretisation, one-hot encoding and pairwise class-conditional counts."""
+
+    def _check_input(self, X):
+        """Fitted check plus the feature-count check sklearn's contract asks for."""
+        check_is_fitted(self, "disc_")
+        return validate_data(self, X, reset=False)
 
     def _prepare(self, X, y):
         self.disc_ = EqualFrequencyDiscretizer(self.n_bins)
@@ -104,15 +113,15 @@ class _DiscreteBayesBase(ClassifierMixin, BaseEstimator):
         return cmi + cmi.T
 
     def predict(self, X):
-        jll = self._joint_log_likelihood(check_array(X))
+        jll = self._joint_log_likelihood(self._check_input(X))
         return self.classes_[np.argmax(jll, axis=1)]
 
     def predict_proba(self, X):
-        jll = self._joint_log_likelihood(check_array(X))
+        jll = self._joint_log_likelihood(self._check_input(X))
         return np.exp(jll - logsumexp(jll, axis=1, keepdims=True))
 
     def predict_log_proba(self, X):
-        jll = self._joint_log_likelihood(check_array(X))
+        jll = self._joint_log_likelihood(self._check_input(X))
         return jll - logsumexp(jll, axis=1, keepdims=True)
 
 
@@ -137,6 +146,7 @@ class KDB(_DiscreteBayesBase):
 
     def fit(self, X, y):
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
         Xd, yi = self._prepare(X, y)
         n, d = Xd.shape
         pair = self._pair_counts(Xd, yi)
@@ -199,6 +209,7 @@ class TAN(KDB):
 
     def fit(self, X, y):
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
         Xd, yi = self._prepare(X, y)
         n, d = Xd.shape
         pair = self._pair_counts(Xd, yi)
@@ -242,6 +253,7 @@ class AODE(_DiscreteBayesBase):
 
     def fit(self, X, y):
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
         Xd, yi = self._prepare(X, y)
         self.n_ = Xd.shape[0]
         self.pair_ = self._pair_counts(Xd, yi)
@@ -289,8 +301,17 @@ class AODE(_DiscreteBayesBase):
 class _GaussianCore:
     """Gaussian sufficient statistics shared by the weighted NB baselines."""
 
+    def _check_input(self, X):
+        """Fitted check plus the feature-count check sklearn's contract asks for."""
+        check_is_fitted(self, "theta_")
+        return validate_data(self, X, reset=False)
+
     def _fit_gaussians(self, X, y, var_smoothing=1e-9):
         self.classes_, counts = np.unique(y, return_counts=True)
+        if len(self.classes_) < 2:
+            raise ValueError(
+                f"{type(self).__name__} needs at least two classes to fit; "
+                f"the training labels contain 1 class")
         n, d = X.shape
         self.n_features_in_ = d
         self.class_prior_ = counts / n
@@ -329,6 +350,7 @@ class WANBIA(ClassifierMixin, BaseEstimator, _GaussianCore):
 
     def fit(self, X, y):
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
         self._fit_gaussians(X, y, self.var_smoothing)
         ll = self._feature_log_likelihood(X)              # (n, K, d)
         yi = np.searchsorted(self.classes_, y)
@@ -349,14 +371,19 @@ class WANBIA(ClassifierMixin, BaseEstimator, _GaussianCore):
                        bounds=[(0.0, None)] * d,
                        options={"maxiter": self.max_iter})
         self.weights_ = np.tile(np.clip(res.x, 1e-3, None), (K, 1))
+        self.n_iter_ = int(res.nit)
         self.effective_dimension_ = self.weights_.sum(axis=1)
         return self
 
     def predict(self, X):
-        return self.classes_[np.argmax(self._jll(check_array(X)), axis=1)]
+        # validate before touching ``classes_``: Python evaluates the
+        # subscript base first, so an unfitted estimator would otherwise
+        # raise AttributeError instead of NotFittedError
+        jll = self._jll(self._check_input(X))
+        return self.classes_[np.argmax(jll, axis=1)]
 
     def predict_proba(self, X):
-        jll = self._jll(check_array(X))
+        jll = self._jll(self._check_input(X))
         return np.exp(jll - logsumexp(jll, axis=1, keepdims=True))
 
 
@@ -379,10 +406,11 @@ class CorrelationWeightedNB(ClassifierMixin, BaseEstimator, _GaussianCore):
     def fit(self, X, y):
         from sklearn.feature_selection import mutual_info_classif
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
         self._fit_gaussians(X, y, self.var_smoothing)
         mi = mutual_info_classif(X, y, random_state=self.random_state)
         rel = mi / mi.max() if mi.max() > 0 else np.ones_like(mi)
-        C = np.abs(np.nan_to_num(np.corrcoef(X, rowvar=False), nan=0.0))
+        C = np.atleast_2d(np.abs(np.nan_to_num(np.corrcoef(X, rowvar=False), nan=0.0)))
         np.fill_diagonal(C, 0.0)
         red = C.sum(axis=1) / max(X.shape[1] - 1, 1)
         w = rel / (1.0 + red)
@@ -392,8 +420,131 @@ class CorrelationWeightedNB(ClassifierMixin, BaseEstimator, _GaussianCore):
         return self
 
     def predict(self, X):
-        return self.classes_[np.argmax(self._jll(check_array(X)), axis=1)]
+        # validate before touching ``classes_``: Python evaluates the
+        # subscript base first, so an unfitted estimator would otherwise
+        # raise AttributeError instead of NotFittedError
+        jll = self._jll(self._check_input(X))
+        return self.classes_[np.argmax(jll, axis=1)]
 
     def predict_proba(self, X):
-        jll = self._jll(check_array(X))
+        jll = self._jll(self._check_input(X))
+        return np.exp(jll - logsumexp(jll, axis=1, keepdims=True))
+
+
+class HNB(_DiscreteBayesBase):
+    """Hidden naive Bayes (Jiang, Zhang & Cai, 2009).
+
+    Each attribute $A_i$ receives a *hidden parent* that summarises all
+    the remaining attributes through a conditional-mutual-information
+    weighted mixture of one-dependence conditionals:
+
+        P(a_i | hp_i, c) = sum_{j != i} W_ij P(a_i | a_j, c),
+        W_ij = I(A_i; A_j | C) / sum_{k != i} I(A_i; A_k | C),
+
+    so the model represents every pairwise dependence at once without
+    searching for a structure and without the exponential parameter
+    growth of a k-parent network.  It is the natural structural
+    counterpart of ABD-NB: HNB *averages over* the dependence graph
+    inside the likelihood, whereas ABD-NB *discounts* it in the exponent.
+    """
+
+    def __init__(self, n_bins: int = 5, chunk: int = 128):
+        self.n_bins = n_bins
+        self.chunk = chunk
+
+    def fit(self, X, y):
+        X, y = check_X_y(X, y)
+        check_classification_targets(y)
+        Xd, yi = self._prepare(X, y)
+        n, d = Xd.shape
+        self.pair_ = self._pair_counts(Xd, yi)
+        self.single_ = self._marginal_counts(self.pair_)
+        cmi = self._cond_mutual_information(self.pair_, self.single_, n)
+        np.fill_diagonal(cmi, 0.0)
+        cmi = np.clip(cmi, 0.0, None)
+        rows = cmi.sum(axis=1, keepdims=True)
+        # a feature independent of every other one falls back to a uniform
+        # mixture, which reproduces plain naive Bayes for that feature
+        uniform = np.full((d, d), 1.0 / max(d - 1, 1))
+        np.fill_diagonal(uniform, 0.0)
+        self.W_ = np.where(rows > 0, cmi / np.maximum(rows, 1e-300), uniform)
+        return self
+
+    def _joint_log_likelihood(self, X):
+        check_is_fitted(self, "W_")
+        Xd = self.disc_.transform(X)
+        F = self._flat(Xd)
+        n_test, d = Xd.shape
+        K = len(self.classes_)
+        lev = self.n_levels_.astype(float)
+        out = np.empty((n_test, K))
+        for start in range(0, n_test, self.chunk):
+            Fc = F[start:start + self.chunk]
+            T = Fc.shape[0]
+            # cnt[k, t, i, j] = N(x_i, x_j | class k);  sp[k, t, j] = N(x_j | k)
+            cnt = self.pair_[:, Fc[:, :, None], Fc[:, None, :]]
+            sp = self.single_[:, Fc]
+            # P(x_i | x_j, c), Laplace-smoothed over the levels of A_i
+            cond = ((cnt + 1.0 / lev[None, None, :, None])
+                    / (sp[:, :, None, :] + 1.0))
+            mix = np.einsum("ktij,ij->kti", cond, self.W_)
+            out[start:start + T] = (np.log(self.class_prior_)[:, None]
+                                    + np.log(np.maximum(mix, 1e-300)).sum(axis=2)).T
+        return out
+
+
+class CFWNB(ClassifierMixin, BaseEstimator, _GaussianCore):
+    """Correlation-based feature weighting for naive Bayes (Jiang et al., 2019).
+
+    ``CFW`` sets the weight of a feature to a sigmoid transformation of
+    the difference between its *mutual relevance* to the class and its
+    *average mutual redundancy* with the other features, both measured by
+    normalised mutual information on discretised data:
+
+        w_i = sigmoid( NMI(A_i; C) - (1/(d-1)) sum_{j != i} NMI(A_i; A_j) ).
+
+    It is the reference filter of the weighted naive Bayes literature and
+    the closest published relative of ABD-NB among relevance/redundancy
+    schemes.  The differences the present paper isolates are that its
+    redundancy term is *marginal* rather than class-conditional, that it
+    enters linearly rather than on the shared-information scale, and that
+    the resulting weights carry neither an evidence-mass constraint nor a
+    fallback to plain naive Bayes.
+    """
+
+    def __init__(self, n_bins: int = 5, var_smoothing: float = 1e-9,
+                 random_state: int | None = 0):
+        self.n_bins = n_bins
+        self.var_smoothing = var_smoothing
+        self.random_state = random_state
+
+    def fit(self, X, y):
+        from .dependence import _normalised_mi
+        X, y = check_X_y(X, y)
+        check_classification_targets(y)
+        self._fit_gaussians(X, y, self.var_smoothing)
+        Xd = EqualFrequencyDiscretizer(self.n_bins).fit_transform(X)
+        d = Xd.shape[1]
+        rel = np.array([_normalised_mi(Xd[:, j], y) for j in range(d)])
+        red = np.zeros(d)
+        if d > 1:
+            M = np.zeros((d, d))
+            for i in range(d):
+                for j in range(i + 1, d):
+                    M[i, j] = M[j, i] = _normalised_mi(Xd[:, i], Xd[:, j])
+            red = M.sum(axis=1) / (d - 1)
+        w = 1.0 / (1.0 + np.exp(-(rel - red)))
+        self.weights_ = np.tile(np.clip(w, 1e-3, None), (len(self.classes_), 1))
+        self.effective_dimension_ = self.weights_.sum(axis=1)
+        return self
+
+    def predict(self, X):
+        # validate before touching ``classes_``: Python evaluates the
+        # subscript base first, so an unfitted estimator would otherwise
+        # raise AttributeError instead of NotFittedError
+        jll = self._jll(self._check_input(X))
+        return self.classes_[np.argmax(jll, axis=1)]
+
+    def predict_proba(self, X):
+        jll = self._jll(self._check_input(X))
         return np.exp(jll - logsumexp(jll, axis=1, keepdims=True))

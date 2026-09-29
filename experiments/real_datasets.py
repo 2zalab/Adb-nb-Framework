@@ -88,6 +88,29 @@ PMLB_REGISTRY = [
     ("magic", "magic", "physics", "numeric"),
 ]
 
+#: large datasets used *without* subsampling by the scalability study
+#: (pmlb name, display name, domain, feature type)
+LARGE_REGISTRY = [
+    ("letter", "letter", "imaging", "numeric"),
+    ("magic", "magic-full", "physics", "numeric"),
+    ("nursery", "nursery-full", "social", "categorical"),
+    ("pendigits", "pendigits", "imaging", "numeric"),
+    ("coil2000", "coil2000", "insurance", "mixed"),
+    ("ann_thyroid", "ann-thyroid", "medicine", "mixed"),
+    ("ring", "ring", "physics", "numeric"),
+    ("twonorm", "twonorm", "physics", "numeric"),
+    ("optdigits", "optdigits", "imaging", "numeric"),
+    ("agaricus_lepiota", "mushroom-full", "biology", "categorical"),
+    ("satimage", "satimage-full", "remote-sensing", "numeric"),
+    ("texture", "texture-full", "imaging", "numeric"),
+    ("spambase", "spambase-full", "text", "numeric"),
+    ("phoneme", "phoneme-full", "speech", "numeric"),
+    ("page_blocks", "page-blocks-full", "document", "numeric"),
+    ("churn", "churn-full", "business", "mixed"),
+    ("kr_vs_kp", "kr-vs-kp", "games", "categorical"),
+    ("waveform_40", "waveform-40", "signal", "numeric"),
+]
+
 SKLEARN_REGISTRY = [
     ("iris", "biology", "numeric"),
     ("wine", "chemistry", "numeric"),
@@ -160,9 +183,20 @@ def stratified_subsample(X, y, max_n: int = MAX_N, seed: int = SUBSAMPLE_SEED):
     return X[idx], y[idx]
 
 
+def get_large_datasets() -> dict:
+    """name -> (X, y) for the scalability study, with **no** subsampling."""
+    out = {}
+    for pmlb_name, disp, _, _ in LARGE_REGISTRY:
+        X, y = load_pmlb(pmlb_name)
+        out[disp] = (X, y)
+    return out
+
+
 def fetch_all(verbose: bool = True) -> None:
     """Populate the local cache (one network round-trip per dataset)."""
-    for pmlb_name, disp, _, _ in PMLB_REGISTRY:
+    registry = PMLB_REGISTRY + [r for r in LARGE_REGISTRY
+                                if r[0] not in {x[0] for x in PMLB_REGISTRY}]
+    for pmlb_name, disp, _, _ in registry:
         try:
             path = download_pmlb(pmlb_name)
             if verbose:
